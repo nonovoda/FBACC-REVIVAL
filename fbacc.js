@@ -207,6 +207,53 @@ javascript:(function(){
     L('Queue snapshot экспортирован','s');
   }
 
+
+
+  function validateBulk(items){
+    const rows=[];
+    const isDigits=(v)=>!v||/^\d{5,}$/.test(v);
+    items.forEach((it,idx)=>{
+      const okAct=isDigits(it.act);
+      const okBiz=isDigits(it.businessId);
+      rows.push({idx:idx+1,ok:okAct&&okBiz,act:it.act||'—',businessId:it.businessId||'—',reason:(okAct&&okBiz)?'OK':'Неверный формат id'});
+    });
+    return rows;
+  }
+
+  function dryRunBulk(){
+    const raw=st.root.querySelector('#bulk-input')?.value||'';
+    const items=parseBulkLines(raw);
+    const rows=validateBulk(items);
+    if(!rows.length){ L('Dry-run: список пуст','w'); return; }
+    const out={};
+    rows.forEach(r=>{ out[`#${r.idx} act=${r.act} biz=${r.businessId}`]=`${r.ok?'OK':'FAIL'} • ${r.reason}`; });
+    kv(st.root.querySelector('#queue-preview'),out);
+    const ok=rows.filter(r=>r.ok).length;
+    L(`Dry-run завершён: valid=${ok}, invalid=${rows.length-ok}`,(rows.length-ok)?'w':'s');
+  }
+
+  function importQueueJsonText(){
+    const raw=st.root.querySelector('#queue-json-input')?.value||'';
+    if(!raw.trim()){ L('JSON import: поле пустое','w'); return; }
+    let parsed;
+    try{ parsed=JSON.parse(raw); }catch(_){ L('JSON import: неверный JSON','e'); return; }
+    const list=Array.isArray(parsed.items)?parsed.items:Array.isArray(parsed)?parsed:[];
+    if(!list.length){ L('JSON import: items не найдены','w'); return; }
+    const rows=validateBulk(list.map(x=>({act:x.act||null,businessId:x.businessId||null})));
+    let added=0;
+    rows.forEach(r=>{
+      if(!r.ok) return;
+      queueAddTask(`JSON #${r.idx} act=${r.act} biz=${r.businessId}`, async()=>{
+        const prev=st.ctx||parseCtx();
+        st.ctx={...prev,act:r.act==='—'?prev.act:r.act,businessId:r.businessId==='—'?prev.businessId:r.businessId};
+        await refreshDashboard();
+        await endpointChecks();
+      });
+      added++;
+    });
+    L(`JSON import: добавлено задач ${added} из ${rows.length}`,(added<rows.length)?'w':'s');
+  }
+
   function init(){
     destroy(); inject();
     st.overlay=document.createElement('div'); st.overlay.className='ov';
@@ -241,7 +288,10 @@ javascript:(function(){
   <div class="sec"><span class="label">Состояние очереди</span><div id="queue-box"></div></div>
   <div class="sec"><span class="label">Bulk input (act business_id на строку)</span><textarea id="bulk-input" class="in ta" placeholder="1234567890 9988776655
 2233445566"></textarea></div>
-  <div class="sec row"><button class="btn" data-act="queue-bulk">Добавить bulk в очередь</button><button class="btn" data-act="queue-export">Экспорт queue JSON</button></div>
+  <div class="sec row"><button class="btn" data-act="queue-dry">Dry-run bulk</button><button class="btn" data-act="queue-bulk">Добавить bulk в очередь</button><button class="btn" data-act="queue-export">Экспорт queue JSON</button></div>
+  <div class="sec"><span class="label">Preview</span><div id="queue-preview"></div></div>
+  <div class="sec"><span class="label">Queue JSON import (items:[{act,businessId}])</span><textarea id="queue-json-input" class="in ta" placeholder="{&quot;items&quot;:[{&quot;act&quot;:&quot;123&quot;,&quot;businessId&quot;:&quot;456&quot;}]}"></textarea></div>
+  <div class="sec row"><button class="btn" data-act="queue-import-json">Импорт queue JSON</button></div>
   <div class="sec row"><button class="btn p" data-act="queue-run">Запустить очередь</button><button class="btn" data-act="queue-reset">Сбросить очередь</button></div>
 </section>
 <section class="p" data-panel="settings">
@@ -272,8 +322,10 @@ javascript:(function(){
       queueAddTask('Refresh Legacy',async()=>refreshLegacy());
       L('Стандартный набор задач добавлен в очередь','s');
     };
+    st.root.querySelector('[data-act="queue-dry"]').onclick=(e)=>withBusy(e.currentTarget,'Проверка...',async()=>dryRunBulk());
     st.root.querySelector('[data-act="queue-bulk"]').onclick=(e)=>withBusy(e.currentTarget,'Добавление...',async()=>queueFromBulk());
     st.root.querySelector('[data-act="queue-export"]').onclick=(e)=>withBusy(e.currentTarget,'Экспорт...',async()=>exportQueueJson());
+    st.root.querySelector('[data-act="queue-import-json"]').onclick=(e)=>withBusy(e.currentTarget,'Импорт...',async()=>importQueueJsonText());
     st.root.querySelector('[data-act="queue-run"]').onclick=(e)=>withBusy(e.currentTarget,'Выполнение...',queueRun);
     st.root.querySelector('[data-act="queue-reset"]').onclick=()=>{queueReset();L('Очередь сброшена','w');};
 
