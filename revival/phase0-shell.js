@@ -49,6 +49,9 @@
 .fbtool__label{display:block;margin:8px 0 4px;color:var(--fbtool-label);font-size:var(--fbtool-label-size)}
 .fbtool__note{color:var(--fbtool-muted);font-size:var(--fbtool-note-size)}
 .fbtool__btn{width:100%;border-radius:var(--fbtool-radius-control);border:1px solid var(--fbtool-border-input);background:var(--fbtool-control-bg);color:var(--fbtool-text);padding:9px;font:inherit;cursor:pointer;font-weight:700}
+.fbtool__tabs{display:flex;margin-top:8px;border-bottom:1px solid var(--fbtool-border-input)}
+.fbtool__tab{flex:1;border:0;background:transparent;color:var(--fbtool-muted);padding:9px 8px;cursor:pointer;font:inherit;font-weight:700}
+.fbtool__tab.is-active{color:var(--fbtool-text);border-bottom:2px solid var(--fbtool-accent)}
 
 .fbacc-shell__overlay {position: fixed;inset: 0;background: rgba(0,0,0,.35);z-index: 2147483646;}
 .fbacc-shell__actions {display: flex;gap: var(--fbtool-gap);margin-top: 10px;}
@@ -58,6 +61,10 @@
 .fbtool__log-line--success { color: var(--fbtool-success); }
 .fbtool__log-line--warning { color: var(--fbtool-warning); }
 .fbtool__log-line--error { color: var(--fbtool-error); }
+.fbacc-shell__panel{display:none}
+.fbacc-shell__panel.is-active{display:block}
+.fbacc-shell__kv{display:grid;grid-template-columns:160px 1fr;gap:6px 10px;font-size:12px;margin-top:6px}
+.fbacc-shell__kv b{color:var(--fbtool-label)}
 `;
     document.head.appendChild(style);
   }
@@ -74,13 +81,45 @@
     logEl.scrollTop = logEl.scrollHeight;
   }
 
+  function buildSnapshot() {
+    const act = new URLSearchParams(location.search).get("act") || "—";
+    const path = location.pathname;
+    const hasIUser = document.cookie.includes("i_user=");
+
+    return {
+      acc: {
+        "ID аккаунта (act)": act,
+        "Путь страницы": path,
+        "Личный профиль": hasIUser ? "Да" : "Нет",
+      },
+      bm: {
+        "business_id в URL": new URLSearchParams(location.search).get("business_id") || "—",
+        "ID в hash": location.hash || "—",
+      },
+      fp: {
+        "Признак fanpage контекста": /page|fan|facebook\.com\//i.test(location.href) ? "Да" : "Не определён",
+        "URL": location.href.slice(0, 120),
+      },
+    };
+  }
+
+  function renderKV(container, data) {
+    container.innerHTML = Object.entries(data)
+      .map(([k, v]) => `<div class="fbacc-shell__kv"><b>${k}</b><span>${v}</span></div>`)
+      .join("");
+  }
+
+  function setActiveTab(root, key) {
+    root.querySelectorAll(".fbtool__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === key));
+    root.querySelectorAll(".fbacc-shell__panel").forEach((p) => p.classList.toggle("is-active", p.dataset.panel === key));
+  }
+
   function init() {
     destroy();
     injectStyle();
 
     const overlay = document.createElement("div");
     overlay.className = "fbacc-shell__overlay";
-    overlay.id = TOOL_ID + "-overlay";
 
     const root = document.createElement("section");
     root.id = TOOL_ID;
@@ -90,15 +129,24 @@
       <header class="fbtool__header">
         <div>
           <h2 class="fbtool__title fbtool__title--medium">FBACC Revival</h2>
-          <div class="fbtool__meta">Phase 0 • Каркас интерфейса</div>
+          <div class="fbtool__meta">Phase 1 • Read-only статусы</div>
         </div>
         <button class="fbtool__close" aria-label="Закрыть">×</button>
       </header>
 
+      <div class="fbtool__tabs">
+        <button class="fbtool__tab is-active" data-tab="acc">Аккаунт</button>
+        <button class="fbtool__tab" data-tab="bm">BM</button>
+        <button class="fbtool__tab" data-tab="fp">FP</button>
+      </div>
+
+      <section class="fbtool__section fbacc-shell__panel is-active" data-panel="acc"><div id="panel-acc"></div></section>
+      <section class="fbtool__section fbacc-shell__panel" data-panel="bm"><div id="panel-bm"></div></section>
+      <section class="fbtool__section fbacc-shell__panel" data-panel="fp"><div id="panel-fp"></div></section>
+
       <section class="fbtool__section">
-        <div class="fbtool__note">Стартовый шаг рефакторинга: единый shell, лог и базовые действия без изменения бизнес-логики.</div>
         <div class="fbacc-shell__actions">
-          <button class="fbtool__btn fbtool__btn--primary" data-action="health">Проверить окружение</button>
+          <button class="fbtool__btn fbtool__btn--primary" data-action="refresh">Обновить snapshot</button>
           <button class="fbtool__btn" data-action="close">Закрыть</button>
         </div>
       </section>
@@ -107,19 +155,15 @@
         <label class="fbtool__label">Системный лог</label>
         <div class="fbtool__log" id="fbacc-shell-log"></div>
       </section>
-
-      <section class="fbtool__section fbtool__note">
-        Используются фирменные стили из репозитория: tokens/typography/styles.
-      </section>
     `;
 
     document.body.appendChild(overlay);
     document.body.appendChild(root);
 
+    const logEl = root.querySelector("#fbacc-shell-log");
     const closeBtn = root.querySelector(".fbtool__close");
     const closeAction = root.querySelector('[data-action="close"]');
-    const healthBtn = root.querySelector('[data-action="health"]');
-    const logEl = root.querySelector("#fbacc-shell-log");
+    const refreshBtn = root.querySelector('[data-action="refresh"]');
 
     const onClose = () => {
       overlay.remove();
@@ -130,29 +174,29 @@
     closeAction.addEventListener("click", onClose);
     overlay.addEventListener("click", onClose);
 
-    healthBtn.addEventListener("click", () => {
-      healthBtn.disabled = true;
-      const oldText = healthBtn.textContent;
-      healthBtn.textContent = "Проверка...";
-
-      log(logEl, "Старт health-check", "info");
-
-      const checks = [
-        ["URL Ads Manager", /facebook\.com\/.+ads/.test(location.href)],
-        ["Наличие document.body", !!document.body],
-        ["Наличие cookie i_user", document.cookie.includes("i_user=")],
-      ];
-
-      checks.forEach(([name, ok]) => {
-        log(logEl, `${name}: ${ok ? "OK" : "Не найдено"}`, ok ? "success" : "warning");
-      });
-
-      log(logEl, "Health-check завершён", "info");
-      healthBtn.disabled = false;
-      healthBtn.textContent = oldText;
+    root.querySelectorAll(".fbtool__tab").forEach((tab) => {
+      tab.addEventListener("click", () => setActiveTab(root, tab.dataset.tab));
     });
 
-    log(logEl, "UI shell инициализирован", "success");
+    function refreshSnapshot() {
+      const snap = buildSnapshot();
+      renderKV(root.querySelector("#panel-acc"), snap.acc);
+      renderKV(root.querySelector("#panel-bm"), snap.bm);
+      renderKV(root.querySelector("#panel-fp"), snap.fp);
+      log(logEl, "Read-only snapshot обновлён", "success");
+    }
+
+    refreshBtn.addEventListener("click", () => {
+      refreshBtn.disabled = true;
+      const oldText = refreshBtn.textContent;
+      refreshBtn.textContent = "Обновление...";
+      refreshSnapshot();
+      refreshBtn.textContent = oldText;
+      refreshBtn.disabled = false;
+    });
+
+    refreshSnapshot();
+    log(logEl, "Phase 1 shell инициализирован", "success");
   }
 
   window.FBACCRevivalShell = { init, destroy };
