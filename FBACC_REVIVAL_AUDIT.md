@@ -1,90 +1,159 @@
-# FBACC.js revival audit
+# FBACC.js revival audit (v2)
 
-## Что это сейчас
-`fbacc.js` — монолитный bookmarklet, который:
-- вытаскивает внутренние токены/контекст из Ads Manager (`fb_dtsg`, `c_user`, selected account);
-- работает поверх внутренних и Graph endpoint’ов Facebook;
-- рендерит собственный pop-up UI внутри страницы;
-- автоматизирует большое число админских действий по ad account / BM / fanpage.
+## Контекст
+`fbacc.js` — legacy bookmarklet (текущая версия в коде: `6.4`), который внедряется в Ads Manager, поднимает собственный popup UI и выполняет набор внутренних операционных действий для ad account / BM / fanpage. 
 
-## Функции, которые стоит оставить (core value)
-1. **Сводка статуса ad account / BM / FP в одном окне**
-   - `showaccstatus`, `showbmstatus`, `showfpstatus`, плюс popups `showMorePopup*`.
-   - Это главный “операционный дашборд” скрипта.
+## Быстрый технический срез
+- Скрипт монолитный (один большой runtime blob).
+- Функций верхнего уровня: **86** (`window.* = function`).
+- Сильно завязан на:
+  - scraping внутреннего контекста и токенов;
+  - внутренние endpoints / payload-ы Facebook;
+  - жёсткие magic-значения (`doc_id`, `__rev`, `spin_*`).
 
-2. **Управление метаданными аккаунта, которые реально нужны в daily ops**
-   - смена currency/timezone (`ProcessEditcurr`, `ProcessEdittzone`);
-   - update name/status-related workflows.
+---
 
-3. **Review/appeal workflows**
-   - `appealadcreo`, `appealadsacc`, `appealfp` как ускорение рутины при ограничениях.
+## 1) Что оставить (must keep)
 
-4. **Работа с BM/FP ролями и привязками**
-   - добавление/удаление пользователей, проверка ассетов, привязка активов.
+### A. Операционный статус-центр (главная ценность)
+Оставить и сделать read-heavy стабильным:
+- `showaccstatus`, `showbmstatus`, `showfpstatus`;
+- детальные popup’ы `showMorePopup*` для drill-down.
 
-## Что стоит вырезать (или вынести в отдельный “danger zone” модуль)
-1. **Операции с кредитками (CC add) в текущем виде**
-   - `addCCtoadAccReq2`, формы `addCCtoadAcc*`.
-   - Сейчас это хранение/обработка PAN/CVC в DOM + JS без безопасного контура.
+**Почему:** это core value скрипта — быстрый “единый экран” для рутины и диагностики.
 
-2. **Любой функционал, который завязан на scraping inline script regex’ами**
-   - поиск access token в `<script>` через regex и magic-string-ы.
-   - Ломается при любом изменении FB frontend.
+### B. Ежедневные account-операции low-risk
+- `ProcessEditcurr`, `ProcessEdittzone` (+ `ShowEdit*` формы);
+- смежные безопасные метаданные (имя/статус там, где это валидно).
 
-3. **Жёстко прошитые `doc_id`, `__rev`, `spin_*` и brittle payload-ы**
-   - быстро устаревает, приводит к массовым false-error.
+**Почему:** высокий практический KPI при относительно контролируемом риске.
 
-4. **Сильно дублированные popup handlers**
-   - десятки `showMorePopup*` без общей абстракции.
+### C. Appeal workflows
+- `appealadcreo`, `appealadsacc`, `appealfp`.
 
-## Что нужно доработать/усилить
-1. **Архитектура**
-   - Разбить монолит на модули: `auth/context`, `api-client`, `features/*`, `ui/*`, `storage/*`.
-   - Перейти на единый command-registry и декларативные feature cards.
+**Почему:** экономия времени на repetitive policy operations.
 
-2. **Слой API**
-   - Единый `request()` с retry/backoff, classify ошибок (rate limit, auth, permission, unknown).
-   - Версионирование endpoint adapters (v1/v2) и capability checks.
+### D. Роли/доступы/привязки BM/FP
+- блоки `showMorePopupBMUsers*`, `showMorePopupBMAccs*`, `showMorePopupFpRoles`, и смежные add/rm.
 
-3. **Безопасность**
-   - Запрет хранения чувствительных данных карт в local storage / plain state.
-   - Секреты только в runtime памяти + auto wipe.
-   - Audit log без PII/PCI.
+**Почему:** это “операционный хлеб” команд, и именно это сложнее всего делать руками в большом объёме.
 
-4. **UX/операторский поток**
-   - Очередь задач: видно прогресс, retry, результат по каждому действию.
-   - Нормальный structured log вместо разрозненных `console.log/alert`.
-   - Dry-run режим перед массовыми действиями.
+---
 
-5. **Надёжность и поддержка**
-   - Инструмент health-check endpoint’ов перед запуском операций.
-   - Feature flags + remote kill-switch для сломанных модулей.
+## 2) Что вырезать или вынести в Danger Zone
 
-## Что добавить в revival-версии
-1. **Пакетный режим (bulk jobs)**
-   - CSV/textarea input для списка account IDs / BM IDs;
-   - очереди, concurrency limit, pause/resume, экспорт результатов.
+### A. Billing / Credit Card операции в текущем виде
+- `addCCtoadAccReq2`, `addCCtoadAccForm`, `addCCtoadAccProcessForm`.
 
-2. **Диагностический модуль “Почему не сработало”**
-   - автоматический разбор отказа: role missing / billing lock / geo limitation / policy gate.
+**Причина:** обработка PAN/CVC в клиентском JS/DOM без безопасного контура. Для revival: либо полностью убрать, либо изолировать за явным unlock + юридические/безопасностные ограничения.
 
-3. **Профили сценариев**
-   - “фарм”, “арбитраж”, “агентский”, “белый e-com” профили с разным набором safe actions.
+### B. Хрупкий token scraping через regex по `<script>`
+- текущее поведение `getAccessTokenFunc`.
 
-4. **Система конфигураций и шаблонов**
-   - сохранённые playbook’и действий под типовые кейсы.
+**Причина:** ломается при любом изменении фронта Facebook, сложно поддерживать и дебажить.
 
-5. **Современный UI слой**
-   - оставить dark compact стиль, но сделать вкладки/таблицы, фильтры, поисковый input, sticky actions.
+### C. Hardcoded request internals
+- жёстко прошитые `doc_id`, `__rev`, `spin_r/b/t`, ручные payload-конструкции.
 
-## Приоритетный roadmap (практично)
-1. **MVP стабилизация**: auth/context + status pages + read-only инструменты.
-2. **Safe write actions**: timezone/currency/name с валидацией и rollback hints.
-3. **Bulk engine + job logs**.
-4. **Appeal module v2**.
-5. **Danger zone (optional)**: legacy-risk actions behind explicit unlock.
+**Причина:** высокая деградация со временем, частые silent breakages.
 
-## Итог
-Сильная сторона fbacc.js — это операционный “комбайн” для FB Ads менеджмента.
-Слабая — монолитность, хрупкие интеграции и рискованные блоки (особенно billing/card).
-В revival версии ядро надо оставить, risky части — изолировать или удалить, а основу перевести на модульную, наблюдаемую и безопасную архитектуру.
+### D. Неконтролируемое дублирование popup handlers
+- десятки `showMorePopup*` без общей абстракции.
+
+**Причина:** высокий maintenance cost и риск несовместимых фиксов.
+
+---
+
+## 3) Что усилить (обязательно)
+
+### A. Архитектура
+Разделить на модули:
+- `core/context` (auth/session/account context);
+- `core/http` (единый request-client);
+- `features/status`, `features/appeals`, `features/bm`, `features/fp`, `features/account`;
+- `ui/modal`, `ui/tables`, `ui/log`;
+- `storage/config`.
+
+### B. API reliability слой
+Ввести единый `request()`:
+- retry/backoff;
+- классификацию ошибок (auth / permission / rate / unknown);
+- единый формат результата (ok/error + details + action hints).
+
+### C. Безопасность
+- запрет хранения чувствительных данных карт в local storage/DOM-state;
+- auto-wipe runtime secrets;
+- log redaction (без PII/PCI);
+- explicit guardrails для risk-операций.
+
+### D. UX для оператора
+- очередь задач (progress, pause/resume, retry);
+- structured log в UI (не только `alert/console.log`);
+- dry-run режим для batch действий.
+
+### E. Наблюдаемость и контроль изменений
+- health-check endpoint’ов перед массовыми действиями;
+- feature flags;
+- kill-switch для сломанного модуля без полного отключения скрипта.
+
+---
+
+## 4) Что добавить в revival-версии
+
+1. **Bulk Jobs Engine**
+   - вход: list/CSV account IDs, BM IDs, page IDs;
+   - concurrency control;
+   - экспорт отчётов (success/fail + причина).
+
+2. **Failure Diagnostics**
+   - авто-классификация “почему не сработало”:
+     - role missing,
+     - billing lock,
+     - policy gate,
+     - geo/eligibility,
+     - endpoint drift.
+
+3. **Scenario Profiles**
+   - профили операций: агентский / ecom / арбитраж / mixed;
+   - разный набор разрешённых action-by-default.
+
+4. **Playbooks & Templates**
+   - шаблоны типовых операций и сохранение параметров.
+
+5. **Modern compact UI**
+   - сохранить dark utility стиль;
+   - добавить фильтры, поиск, сортировку, sticky actions, батч-таблицы.
+
+---
+
+## 5) Приоритетный roadmap (implementation-first)
+
+### Phase 0 — Stabilize shell
+- выделить загрузчик/инициализацию;
+- вынести конфиг и feature flags;
+- собрать baseline health-check.
+
+### Phase 1 — Read-only core
+- стабильные status views (acc/bm/fp) + unified logs;
+- без рискованных write-операций.
+
+### Phase 2 — Safe writes
+- currency/timezone/name через единый API-client, validations, error hints.
+
+### Phase 3 — Bulk engine
+- очереди, отчёты, retry policy, dry-run.
+
+### Phase 4 — Appeals v2
+- переупаковка appeal workflows в новую архитектуру.
+
+### Phase 5 — Danger zone (optional)
+- legacy-risk операции только за explicit unlock и строгими guardrails.
+
+---
+
+## 6) Практический verdict
+Скрипт действительно “легендарный”, потому что закрывает большой пласт операционки в Facebook Ads.
+Для revival нужен не косметический рефактор, а **контролируемая ре-платформизация**:
+- сохранить статус-центр и ежедневные low-risk workflows;
+- вынести/удалить unsafe billing и brittle scraping;
+- построить модульный, наблюдаемый, безопасный движок batch-операций.
