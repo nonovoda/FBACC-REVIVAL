@@ -29,7 +29,7 @@ javascript:(function(){
 .s{color:var(--ok)}.w{color:var(--wr)}.e{color:var(--er)}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:2147483646}
 .tg{display:flex;align-items:center;gap:8px}.tg input{accent-color:var(--acc)}
-.in{width:100%;border-radius:9px;border:1px solid var(--bd3);background:var(--ctl);color:var(--tx);padding:9px;font:inherit}
+.in{width:100%;border-radius:9px;border:1px solid var(--bd3);background:var(--ctl);color:var(--tx);padding:9px;font:inherit}.ta{min-height:110px;resize:vertical}
 `;
 
   const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
@@ -173,6 +173,40 @@ javascript:(function(){
 
   function copySummary(){ const c=st.ctx||parseCtx(); navigator.clipboard.writeText(`FBACC SNAPSHOT\nact=${c.act||'-'}\nbusiness_id=${c.businessId||'-'}\npath=${c.path}\nurl=${c.url}`).then(()=>L('Сводка скопирована','s')).catch(()=>L('Не удалось скопировать','w')); }
 
+
+  function parseBulkLines(text){
+    return text.split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
+      const parts=line.split(/[;,	 ]+/).filter(Boolean);
+      return {act:parts[0]||null,businessId:parts[1]||null};
+    });
+  }
+
+  function queueFromBulk(){
+    const raw=st.root.querySelector('#bulk-input')?.value||'';
+    const items=parseBulkLines(raw);
+    if(!items.length){ L('Bulk список пуст','w'); return; }
+    items.forEach((it,idx)=>{
+      queueAddTask(`Bulk #${idx+1} act=${it.act||'-'} biz=${it.businessId||'-'}`, async()=>{
+        const prev=st.ctx||parseCtx();
+        st.ctx={...prev,act:it.act||prev.act,businessId:it.businessId||prev.businessId};
+        await refreshDashboard();
+        await endpointChecks();
+      });
+    });
+    L(`Bulk задачи добавлены: ${items.length}`,'s');
+  }
+
+  function exportQueueJson(){
+    const dump=JSON.stringify({settings:st.settings,queue:st.queue.map(x=>x.name),stats:st.stats,context:st.ctx},null,2);
+    const blob=new Blob([dump],{type:'application/json;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`fbacc-queue-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    L('Queue snapshot экспортирован','s');
+  }
+
   function init(){
     destroy(); inject();
     st.overlay=document.createElement('div'); st.overlay.className='ov';
@@ -205,6 +239,9 @@ javascript:(function(){
 <section class="p" data-panel="queue">
   <div class="note">Очередь задач для пакетного read-only выполнения.</div>
   <div class="sec"><span class="label">Состояние очереди</span><div id="queue-box"></div></div>
+  <div class="sec"><span class="label">Bulk input (act business_id на строку)</span><textarea id="bulk-input" class="in ta" placeholder="1234567890 9988776655
+2233445566"></textarea></div>
+  <div class="sec row"><button class="btn" data-act="queue-bulk">Добавить bulk в очередь</button><button class="btn" data-act="queue-export">Экспорт queue JSON</button></div>
   <div class="sec row"><button class="btn p" data-act="queue-run">Запустить очередь</button><button class="btn" data-act="queue-reset">Сбросить очередь</button></div>
 </section>
 <section class="p" data-panel="settings">
@@ -235,6 +272,8 @@ javascript:(function(){
       queueAddTask('Refresh Legacy',async()=>refreshLegacy());
       L('Стандартный набор задач добавлен в очередь','s');
     };
+    st.root.querySelector('[data-act="queue-bulk"]').onclick=(e)=>withBusy(e.currentTarget,'Добавление...',async()=>queueFromBulk());
+    st.root.querySelector('[data-act="queue-export"]').onclick=(e)=>withBusy(e.currentTarget,'Экспорт...',async()=>exportQueueJson());
     st.root.querySelector('[data-act="queue-run"]').onclick=(e)=>withBusy(e.currentTarget,'Выполнение...',queueRun);
     st.root.querySelector('[data-act="queue-reset"]').onclick=()=>{queueReset();L('Очередь сброшена','w');};
 
