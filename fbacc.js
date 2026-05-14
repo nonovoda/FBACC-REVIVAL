@@ -29,6 +29,7 @@ javascript:(function(){
 
   function t(){return new Date().toLocaleTimeString('ru-RU',{hour12:false});}
   function log(msg,type='i'){if(!state.logEl)return;const d=document.createElement('div');d.className=type==='i'?'':type;d.textContent=`[${t()}] ${msg}`;state.logEl.appendChild(d);state.logEl.scrollTop=state.logEl.scrollHeight;}
+  function shortUrl(u){try{const x=new URL(u);return `${x.hostname}${x.pathname}`;}catch(_){return String(u).slice(0,80);} }
 
   function injectStyle(){if(document.getElementById(STYLE_ID))return;const s=document.createElement('style');s.id=STYLE_ID;s.textContent=css;document.head.appendChild(s);}
   function destroy(){state.overlay?.remove();state.root?.remove();document.getElementById(STYLE_ID)?.remove();window.removeEventListener('keydown',onEsc);} 
@@ -81,23 +82,24 @@ javascript:(function(){
   }
 
   async function request(url,opt={}){
-    const {method='GET',credentials='include',timeoutMs=12000,retries=1}=opt;
+    const {method='GET',credentials='include',timeoutMs=12000,retries=1,trace=true}=opt;
     let lastErr=null;
     for(let i=0;i<=retries;i++){
       const ctrl=new AbortController();
       const tmr=setTimeout(()=>ctrl.abort(),timeoutMs);
+      const started=performance.now();
       try{
         const res=await fetch(url,{method,credentials,signal:ctrl.signal});
         clearTimeout(tmr);
         let json=null;
         try{ json=await res.json(); }catch(_){ json=null; }
-        if(res.ok){ return {ok:true,status:res.status,data:json,errorType:null}; }
+        if(res.ok){ const ms=Math.round(performance.now()-started); if(trace) log(`REQ ${method} ${shortUrl(url)} -> ${res.status} (${ms}ms)`,'s'); return {ok:true,status:res.status,data:json,errorType:null,durationMs:ms}; }
         const msg=json?.error?.message||`HTTP ${res.status}`;
         const type=classifyError(res.status,msg);
-        lastErr={ok:false,status:res.status,data:json,errorType:type,message:msg};
+        const ms=Math.round(performance.now()-started); if(trace) log(`REQ ${method} ${shortUrl(url)} -> ${res.status} ${type} (${ms}ms)`,'w'); lastErr={ok:false,status:res.status,data:json,errorType:type,message:msg,durationMs:ms};
       }catch(e){
         clearTimeout(tmr);
-        lastErr={ok:false,status:0,data:null,errorType:classifyError(0,e.message),message:e.message};
+        const ms=Math.round(performance.now()-started); if(trace) log(`REQ ${method} ${shortUrl(url)} -> fail ${classifyError(0,e.message)} (${ms}ms)`,'e'); lastErr={ok:false,status:0,data:null,errorType:classifyError(0,e.message),message:e.message,durationMs:ms};
       }
       if(i<retries) await new Promise(r=>setTimeout(r,350*(i+1)));
     }
