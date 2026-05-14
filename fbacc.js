@@ -30,6 +30,15 @@ javascript:(function(){
   function t(){return new Date().toLocaleTimeString('ru-RU',{hour12:false});}
   function log(msg,type='i'){if(!state.logEl)return;const d=document.createElement('div');d.className=type==='i'?'':type;d.textContent=`[${t()}] ${msg}`;state.logEl.appendChild(d);state.logEl.scrollTop=state.logEl.scrollHeight;}
   function shortUrl(u){try{const x=new URL(u);return `${x.hostname}${x.pathname}`;}catch(_){return String(u).slice(0,80);} }
+  async function withBusy(btn,label,fn){
+    if(!btn) return fn();
+    if(btn.dataset.busy==='1') return;
+    const old=btn.textContent;
+    btn.dataset.busy='1';
+    btn.disabled=true;
+    btn.textContent=label||'Обработка...';
+    try{ return await fn(); } finally { btn.textContent=old; btn.disabled=false; btn.dataset.busy='0'; }
+  }
 
   function injectStyle(){if(document.getElementById(STYLE_ID))return;const s=document.createElement('style');s.id=STYLE_ID;s.textContent=css;document.head.appendChild(s);}
   function destroy(){state.overlay?.remove();state.root?.remove();document.getElementById(STYLE_ID)?.remove();window.removeEventListener('keydown',onEsc);} 
@@ -240,12 +249,12 @@ javascript:(function(){
 
     root.querySelector('.fc').onclick=destroy; ov.onclick=destroy; window.addEventListener('keydown',onEsc);
     root.querySelectorAll('.tab').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
-    root.querySelector('[data-act="diag"]').onclick=runDiagnostics;
-    root.querySelector('[data-act="checks"]').onclick=runReadOnlyChecks;
-    root.querySelector('[data-act="copy"]').onclick=copySummary;
-    root.querySelector('[data-act="legacy"]').onclick=refreshLegacy;
+    root.querySelector('[data-act="diag"]').onclick=(e)=>withBusy(e.currentTarget,'Проверка...',async()=>runDiagnostics());
+    root.querySelector('[data-act="checks"]').onclick=(e)=>withBusy(e.currentTarget,'Проверка...',async()=>runReadOnlyChecks());
+    root.querySelector('[data-act="copy"]').onclick=(e)=>withBusy(e.currentTarget,'Копирование...',async()=>copySummary());
+    root.querySelector('[data-act="legacy"]').onclick=(e)=>withBusy(e.currentTarget,'Обновление...',async()=>refreshLegacy());
     root.querySelector('[data-act="close"]').onclick=destroy;
-    root.querySelectorAll('[data-act="refresh"]').forEach(b=>b.onclick=()=>refreshOverview());
+    root.querySelectorAll('[data-act="refresh"]').forEach(b=>b.onclick=(e)=>withBusy(e.currentTarget,'Обновление...',async()=>refreshOverview()));
 
     log('Инициализация нового fbacc.js завершена','s');
     refreshOverview();
