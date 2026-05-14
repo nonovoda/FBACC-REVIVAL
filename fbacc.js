@@ -9,6 +9,7 @@ javascript:(function(){
     queue:[],
     running:false,
     stats:{total:0,done:0,ok:0,fail:0},
+    history:[],
     settings:{trace:true,retries:1,timeoutMs:12000,delayMs:250}
   };
 
@@ -132,7 +133,7 @@ javascript:(function(){
   }
 
   function queueAddTask(name,fn){ st.queue.push({name,fn}); st.stats.total=st.queue.length+st.stats.done; renderQueue(); }
-  function queueReset(){ st.queue=[]; st.running=false; st.stats={total:0,done:0,ok:0,fail:0}; renderQueue(); }
+  function queueReset(){ st.queue=[]; st.running=false; st.stats={total:0,done:0,ok:0,fail:0}; st.history=[]; renderQueue(); }
   function renderQueue(){
     const box=st.root.querySelector('#queue-box');
     kv(box,{
@@ -147,8 +148,8 @@ javascript:(function(){
     if(st.running) return; st.running=true; renderQueue(); L('Запуск очереди задач','s');
     while(st.queue.length){
       const t=st.queue.shift(); renderQueue();
-      try{ await t.fn(); st.stats.ok++; L(`TASK OK: ${t.name}`,'s'); }
-      catch(e){ st.stats.fail++; L(`TASK FAIL: ${t.name} (${e.message})`,'e'); }
+      try{ await t.fn(); st.stats.ok++; st.history.push({name:t.name,status:'ok',message:'OK'}); L(`TASK OK: ${t.name}`,'s'); }
+      catch(e){ st.stats.fail++; st.history.push({name:t.name,status:'fail',message:e.message||'error'}); L(`TASK FAIL: ${t.name} (${e.message})`,'e'); }
       st.stats.done++; renderQueue(); await wait(st.settings.delayMs);
     }
     st.running=false; renderQueue(); queueFinalReport(); L('Очередь завершена','s');
@@ -281,6 +282,34 @@ javascript:(function(){
     L(`JSON import: добавлено задач ${added} из ${rows.length}`,(added<rows.length)?'w':'s');
   }
 
+
+
+  function runScenario(mode){
+    queueReset();
+    if(mode==='quick_audit'){
+      addPresetToQueue('quick');
+    }else if(mode==='deep_audit'){
+      addPresetToQueue('deep');
+      queueAddTask('Extra Endpoint Checks',endpointChecks);
+    }else if(mode==='bulk_audit'){
+      queueFromBulk();
+    }
+    L(`Сценарий '${mode}' подготовлен`,'s');
+  }
+
+  function exportReportCsv(){
+    const rows=[['task','status','message'],...st.history.map(h=>[h.name,h.status,h.message])];
+    const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('
+');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`fbacc-report-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    L('CSV отчёт экспортирован','s');
+  }
+
   function init(){
     destroy(); inject();
     st.overlay=document.createElement('div'); st.overlay.className='ov';
@@ -320,6 +349,7 @@ javascript:(function(){
   <div class="sec"><span class="label">Queue JSON import (items:[{act,businessId}])</span><textarea id="queue-json-input" class="in ta" placeholder="{&quot;items&quot;:[{&quot;act&quot;:&quot;123&quot;,&quot;businessId&quot;:&quot;456&quot;}]}"></textarea></div>
   <div class="sec row"><button class="btn" data-act="queue-import-json">Импорт queue JSON</button></div>
   <div class="sec row"><button class="btn" data-act="preset-quick">Preset Quick</button><button class="btn" data-act="preset-standard">Preset Standard</button><button class="btn" data-act="preset-deep">Preset Deep</button></div>
+  <div class="sec row"><button class="btn" data-act="scenario-quick">Сценарий Quick Audit</button><button class="btn" data-act="scenario-deep">Сценарий Deep Audit</button><button class="btn" data-act="scenario-bulk">Сценарий Bulk Audit</button></div>
   <div class="sec row"><button class="btn p" data-act="queue-run">Запустить очередь</button><button class="btn" data-act="queue-reset">Сбросить очередь</button></div>
   <div class="sec"><span class="label">Отчёт выполнения</span><div id="queue-report"></div></div>
 </section>
@@ -331,7 +361,7 @@ javascript:(function(){
 </section>
 <section class="p" data-panel="tools">
   <div class="note">Безопасные утилиты.</div>
-  <div class="sec row"><button class="btn" data-act="copy">Скопировать сводку</button><button class="btn" data-act="log-export">Экспорт лога</button><button class="btn" data-act="close">Закрыть</button></div>
+  <div class="sec row"><button class="btn" data-act="copy">Скопировать сводку</button><button class="btn" data-act="log-export">Экспорт лога</button><button class="btn" data-act="report-csv">Экспорт CSV отчёта</button><button class="btn" data-act="close">Закрыть</button></div>
 </section>
 <div class="sec"><span class="label">Системный лог</span><div id="app-log" class="log"></div></div>`;
 
@@ -358,12 +388,16 @@ javascript:(function(){
     st.root.querySelector('[data-act="preset-quick"]').onclick=()=>addPresetToQueue('quick');
     st.root.querySelector('[data-act="preset-standard"]').onclick=()=>addPresetToQueue('standard');
     st.root.querySelector('[data-act="preset-deep"]').onclick=()=>addPresetToQueue('deep');
+    st.root.querySelector('[data-act="scenario-quick"]').onclick=()=>runScenario('quick_audit');
+    st.root.querySelector('[data-act="scenario-deep"]').onclick=()=>runScenario('deep_audit');
+    st.root.querySelector('[data-act="scenario-bulk"]').onclick=()=>runScenario('bulk_audit');
     st.root.querySelector('[data-act="queue-run"]').onclick=(e)=>withBusy(e.currentTarget,'Выполнение...',queueRun);
     st.root.querySelector('[data-act="queue-reset"]').onclick=()=>{queueReset(); kv(st.root.querySelector('#queue-report'),{'Статус':'Нет данных'}); L('Очередь сброшена','w');};
 
     st.root.querySelector('[data-act="settings-apply"]').onclick=(e)=>withBusy(e.currentTarget,'Применение...',async()=>applySettings());
     st.root.querySelector('[data-act="copy"]').onclick=(e)=>withBusy(e.currentTarget,'Копирование...',async()=>copySummary());
     st.root.querySelector('[data-act="log-export"]').onclick=(e)=>withBusy(e.currentTarget,'Экспорт...',async()=>exportLog());
+    st.root.querySelector('[data-act="report-csv"]').onclick=(e)=>withBusy(e.currentTarget,'Экспорт...',async()=>exportReportCsv());
     st.root.querySelector('[data-act="close"]').onclick=destroy;
 
     queueReset();
