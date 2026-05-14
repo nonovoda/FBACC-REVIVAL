@@ -46,6 +46,30 @@ javascript:(function(){
 
   function renderKV(target,obj){target.innerHTML=Object.entries(obj).map(([k,v])=>`<div class="kv"><b>${k}</b><span>${v??'—'}</span></div>`).join('');}
 
+
+  function tryRequire(path){
+    try { return window.require(path); } catch(_) { return null; }
+  }
+
+  function extractLegacyContext(){
+    const dtsgNode=document.querySelector('[name="fb_dtsg"]');
+    const dtsg=dtsgNode?.value||tryRequire('DTSGInitialData')?.token||null;
+    const currentUser=tryRequire('CurrentUserInitialData');
+    const socid=currentUser?.USER_ID||((document.cookie.match(/c_user=(\d+)/)||[])[1]||null);
+    const shortname=currentUser?.SHORT_NAME||null;
+
+    let token=null;
+    const scripts=document.getElementsByTagName('script');
+    const re=/"EA[A-Za-z0-9]{20,}/gm;
+    for(let i=0;i<scripts.length;i++){
+      const html=scripts[i].innerHTML||'';
+      const m=html.match(re);
+      if(m&&m[0]){ token=m[0].slice(1); break; }
+    }
+
+    return {dtsg,socid,shortname,tokenFound:!!token,tokenPreview:token?`${token.slice(0,10)}...${token.slice(-6)}`:'—'};
+  }
+
   async function safeFetchAccountSnapshot(){
     const c=state.context;
     if(!c.act) return {status:'Нет act в URL',name:'—',currency:'—',timezone:'—'};
@@ -90,6 +114,18 @@ javascript:(function(){
     log('Read-only проверка аккаунта завершена','s');
   }
 
+  function refreshLegacy(){
+    const l=extractLegacyContext();
+    renderKV(state.root.querySelector('#ov-legacy'),{
+      'fb_dtsg':l.dtsg?'найден':'нет',
+      'socid (c_user/CurrentUser)':l.socid||'—',
+      'shortname':l.shortname||'—',
+      'access token':l.tokenFound?'найден (preview ниже)':'не найден',
+      'token preview':l.tokenPreview
+    });
+    log('Legacy context обновлён (read-only)','s');
+  }
+
   function runDiagnostics(){
     const c=state.context||parseContext();
     log('Диагностика окружения запущена','i');
@@ -115,7 +151,7 @@ javascript:(function(){
 <div class="tabs">
   <button class="tab a" data-tab="overview">Обзор</button>
   <button class="tab" data-tab="diag">Диагностика</button>
-  <button class="tab" data-tab="tools">Инструменты</button>
+  <button class="tab" data-tab="legacy">Legacy</button><button class="tab" data-tab="tools">Инструменты</button>
 </div>
 <section class="p a" data-panel="overview">
   <div class="sec"><span class="label">Локальный контекст</span><div id="ov-context"></div></div>
@@ -124,6 +160,11 @@ javascript:(function(){
 <section class="p" data-panel="diag">
   <div class="note">Панель запускает диагностические проверки окружения и пишет результат в лог.</div>
   <div class="sec row"><button class="btn p" data-act="diag">Запустить диагностику</button><button class="btn" data-act="refresh">Обновить контекст</button></div>
+</section>
+<section class="p" data-panel="legacy">
+  <div class="note">Read-only мост к legacy-контексту (без выполнения рискованных действий).</div>
+  <div class="sec"><span class="label">Legacy context</span><div id="ov-legacy"></div></div>
+  <div class="sec row"><button class="btn" data-act="legacy">Обновить legacy context</button><button class="btn" data-act="refresh">Обновить общий контекст</button></div>
 </section>
 <section class="p" data-panel="tools">
   <div class="note">Только безопасные действия без мутаций данных.</div>
@@ -138,11 +179,13 @@ javascript:(function(){
     root.querySelectorAll('.tab').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
     root.querySelector('[data-act="diag"]').onclick=runDiagnostics;
     root.querySelector('[data-act="copy"]').onclick=copySummary;
+    root.querySelector('[data-act="legacy"]').onclick=refreshLegacy;
     root.querySelector('[data-act="close"]').onclick=destroy;
     root.querySelectorAll('[data-act="refresh"]').forEach(b=>b.onclick=()=>refreshOverview());
 
     log('Инициализация нового fbacc.js завершена','s');
     refreshOverview();
+    refreshLegacy();
   }
 
   init();
