@@ -70,18 +70,49 @@ javascript:(function(){
     return {dtsg,socid,shortname,tokenFound:!!token,tokenPreview:token?`${token.slice(0,10)}...${token.slice(-6)}`:'—'};
   }
 
+
+
+  function classifyError(status,msg){
+    if(status===401||status===403) return 'auth';
+    if(status===429) return 'rate_limit';
+    if(status>=500) return 'server';
+    if(msg&&/network|failed|fetch/i.test(msg)) return 'network';
+    return 'unknown';
+  }
+
+  async function request(url,opt={}){
+    const {method='GET',credentials='include',timeoutMs=12000,retries=1}=opt;
+    let lastErr=null;
+    for(let i=0;i<=retries;i++){
+      const ctrl=new AbortController();
+      const tmr=setTimeout(()=>ctrl.abort(),timeoutMs);
+      try{
+        const res=await fetch(url,{method,credentials,signal:ctrl.signal});
+        clearTimeout(tmr);
+        let json=null;
+        try{ json=await res.json(); }catch(_){ json=null; }
+        if(res.ok){ return {ok:true,status:res.status,data:json,errorType:null}; }
+        const msg=json?.error?.message||`HTTP ${res.status}`;
+        const type=classifyError(res.status,msg);
+        lastErr={ok:false,status:res.status,data:json,errorType:type,message:msg};
+      }catch(e){
+        clearTimeout(tmr);
+        lastErr={ok:false,status:0,data:null,errorType:classifyError(0,e.message),message:e.message};
+      }
+      if(i<retries) await new Promise(r=>setTimeout(r,350*(i+1)));
+    }
+    return lastErr;
+  }
+
   async function safeFetchAccountSnapshot(){
     const c=state.context;
     if(!c.act) return {status:'Нет act в URL',name:'—',currency:'—',timezone:'—'};
-    // Read-only probe; token-less request might fail, we handle softly.
-    try{
-      const res=await fetch(`https://graph.facebook.com/v19.0/act_${c.act}?fields=id,name,currency,timezone_name`,{credentials:'include'});
-      const j=await res.json();
-      if(j.error) return {status:`Ошибка: ${j.error.message||'unknown'}`,name:'—',currency:'—',timezone:'—'};
-      return {status:'OK',name:j.name||'—',currency:j.currency||'—',timezone:j.timezone_name||'—'};
-    }catch(e){
-      return {status:'Сетевой/доступ: недоступно',name:'—',currency:'—',timezone:'—'};
+    const r=await request(`https://graph.facebook.com/v19.0/act_${c.act}?fields=id,name,currency,timezone_name`,{retries:1});
+    if(!r.ok){
+      return {status:`Ошибка (${r.errorType}): ${r.message||'unknown'}`,name:'—',currency:'—',timezone:'—'};
     }
+    const j=r.data||{};
+    return {status:'OK',name:j.name||'—',currency:j.currency||'—',timezone:j.timezone_name||'—'};
   }
 
   function switchTab(tab){
@@ -141,8 +172,8 @@ javascript:(function(){
     for(const e of endpoints){
       if(!e.url){ checks.push([e.name,'Пропущен','Недостаточно данных']); continue; }
       try{
-        const r=await fetch(e.url,{method:'GET',credentials:'include'});
-        checks.push([e.name, r.ok?'OK':'Ошибка', `HTTP ${r.status}`]);
+        const r=await request(e.url,{retries:0,timeoutMs:8000});
+        checks.push([e.name, r.ok?'OK':'Ошибка', r.ok?`HTTP ${r.status}`:`${r.errorType||'unknown'} ${r.status||''}`]);
       }catch(err){
         checks.push([e.name,'Ошибка','network/fetch']);
       }
