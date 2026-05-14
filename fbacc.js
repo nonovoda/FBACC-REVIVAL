@@ -151,7 +151,34 @@ javascript:(function(){
       catch(e){ st.stats.fail++; L(`TASK FAIL: ${t.name} (${e.message})`,'e'); }
       st.stats.done++; renderQueue(); await wait(st.settings.delayMs);
     }
-    st.running=false; renderQueue(); L('Очередь завершена','s');
+    st.running=false; renderQueue(); queueFinalReport(); L('Очередь завершена','s');
+  }
+
+
+
+  function addPresetToQueue(mode){
+    const presets={
+      quick:[['Refresh Dashboard',refreshDashboard]],
+      standard:[['Refresh Dashboard',refreshDashboard],['Endpoint Checks',endpointChecks],['Refresh Legacy',async()=>refreshLegacy()]],
+      deep:[['Refresh Dashboard',refreshDashboard],['Endpoint Checks #1',endpointChecks],['Refresh Legacy',async()=>refreshLegacy()],['Endpoint Checks #2',endpointChecks],['Diagnostics',async()=>diagRun()]]
+    };
+    const list=presets[mode]||presets.standard;
+    list.forEach(([name,fn])=>queueAddTask(name,fn));
+    L(`Preset '${mode}' добавлен: ${list.length} задач`,'s');
+  }
+
+  function queueFinalReport(){
+    const total=st.stats.total||0;
+    const ok=st.stats.ok||0;
+    const fail=st.stats.fail||0;
+    const rate=total?Math.round((ok/total)*100):0;
+    kv(st.root.querySelector('#queue-report'),{
+      'Всего задач':total,
+      'Успешно':ok,
+      'С ошибкой':fail,
+      'Success rate':`${rate}%`,
+      'Очередь пуста':st.queue.length===0?'Да':'Нет'
+    });
   }
 
   async function withBusy(btn,label,fn){ if(!btn) return fn(); if(btn.dataset.busy==='1') return; const old=btn.textContent; btn.dataset.busy='1'; btn.disabled=true; btn.textContent=label||'Обработка...'; try{return await fn();}finally{btn.textContent=old;btn.disabled=false;btn.dataset.busy='0';}}
@@ -292,7 +319,9 @@ javascript:(function(){
   <div class="sec"><span class="label">Preview</span><div id="queue-preview"></div></div>
   <div class="sec"><span class="label">Queue JSON import (items:[{act,businessId}])</span><textarea id="queue-json-input" class="in ta" placeholder="{&quot;items&quot;:[{&quot;act&quot;:&quot;123&quot;,&quot;businessId&quot;:&quot;456&quot;}]}"></textarea></div>
   <div class="sec row"><button class="btn" data-act="queue-import-json">Импорт queue JSON</button></div>
+  <div class="sec row"><button class="btn" data-act="preset-quick">Preset Quick</button><button class="btn" data-act="preset-standard">Preset Standard</button><button class="btn" data-act="preset-deep">Preset Deep</button></div>
   <div class="sec row"><button class="btn p" data-act="queue-run">Запустить очередь</button><button class="btn" data-act="queue-reset">Сбросить очередь</button></div>
+  <div class="sec"><span class="label">Отчёт выполнения</span><div id="queue-report"></div></div>
 </section>
 <section class="p" data-panel="settings">
   <div class="note">Глобальные параметры request/queue.</div>
@@ -326,8 +355,11 @@ javascript:(function(){
     st.root.querySelector('[data-act="queue-bulk"]').onclick=(e)=>withBusy(e.currentTarget,'Добавление...',async()=>queueFromBulk());
     st.root.querySelector('[data-act="queue-export"]').onclick=(e)=>withBusy(e.currentTarget,'Экспорт...',async()=>exportQueueJson());
     st.root.querySelector('[data-act="queue-import-json"]').onclick=(e)=>withBusy(e.currentTarget,'Импорт...',async()=>importQueueJsonText());
+    st.root.querySelector('[data-act="preset-quick"]').onclick=()=>addPresetToQueue('quick');
+    st.root.querySelector('[data-act="preset-standard"]').onclick=()=>addPresetToQueue('standard');
+    st.root.querySelector('[data-act="preset-deep"]').onclick=()=>addPresetToQueue('deep');
     st.root.querySelector('[data-act="queue-run"]').onclick=(e)=>withBusy(e.currentTarget,'Выполнение...',queueRun);
-    st.root.querySelector('[data-act="queue-reset"]').onclick=()=>{queueReset();L('Очередь сброшена','w');};
+    st.root.querySelector('[data-act="queue-reset"]').onclick=()=>{queueReset(); kv(st.root.querySelector('#queue-report'),{'Статус':'Нет данных'}); L('Очередь сброшена','w');};
 
     st.root.querySelector('[data-act="settings-apply"]').onclick=(e)=>withBusy(e.currentTarget,'Применение...',async()=>applySettings());
     st.root.querySelector('[data-act="copy"]').onclick=(e)=>withBusy(e.currentTarget,'Копирование...',async()=>copySummary());
@@ -335,6 +367,7 @@ javascript:(function(){
     st.root.querySelector('[data-act="close"]').onclick=destroy;
 
     queueReset();
+    kv(st.root.querySelector('#queue-report'),{'Статус':'Нет данных'});
     L('fbacc vNext инициализирован','s');
     refreshDashboard();
     refreshLegacy();
