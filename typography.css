@@ -1,0 +1,70 @@
+/* ui/core/typography.css */
+
+.fbtool,
+.fbtool * {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+.fbtool {
+  color: #e8fff0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.fbtool__title {
+  margin: 0;
+  color: #4dff8f;
+  font-size: 32px;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.fbtool__title--medium {
+  font-size: 28px;
+}
+
+.fbtool__meta {
+  margin-top: 4px;
+  color: #99b3a6;
+  font-size: 11px;
+}
+
+.fbtool__label,
+.fbtool label {
+  display: block;
+  margin: 8px 0 4px;
+  color: #c7e0d2;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.fbtool__note {
+  margin-top: 8px;
+  color: #99b3a6;
+  font-size: 11px;
+}
+
+.fbtool__muted {
+  color: #99b3a6;
+}
+
+.fbtool__success,
+.fbtool .is-success {
+  color: #9bff7d;
+}
+
+.fbtool__warning,
+.fbtool .is-warning {
+  color: #ffd27d;
+}
+
+.fbtool__error,
+.fbtool .is-error {
+  color: #ff8f8f;
+}
+
+.fbtool__mono,
+.fbtool__log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}

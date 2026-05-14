@@ -1,0 +1,358 @@
+/* ui/core/styles.css */
+
+:root {
+  --fbtool-panel-bg: #0f1715;
+  --fbtool-deep-bg: #0b1210;
+  --fbtool-control-bg: #121f1b;
+
+  --fbtool-border: #2b433a;
+  --fbtool-border-soft: #22372f;
+  --fbtool-border-input: #2f4a40;
+
+  --fbtool-text: #e8fff0;
+  --fbtool-label: #c7e0d2;
+  --fbtool-muted: #99b3a6;
+
+  --fbtool-accent: #4dff8f;
+  --fbtool-accent-text: #052012;
+
+  --fbtool-success: #9bff7d;
+  --fbtool-warning: #ffd27d;
+  --fbtool-error: #ff8f8f;
+  --fbtool-close: #d3e8dc;
+
+  --fbtool-radius-control: 9px;
+  --fbtool-radius-log: 10px;
+  --fbtool-radius-modal: 14px;
+
+  --fbtool-shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.45);
+
+  --fbtool-width-compact: min(420px, calc(100vw - 24px));
+  --fbtool-width-medium: min(520px, calc(100vw - 24px));
+  --fbtool-width-large: min(720px, calc(100vw - 24px));
+  --fbtool-max-height: calc(100vh - 40px);
+
+  --fbtool-padding-modal: 14px;
+  --fbtool-gap: 8px;
+  --fbtool-padding-control: 9px;
+
+  --fbtool-font: Inter, "Segoe UI", Arial, sans-serif;
+  --fbtool-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  --fbtool-font-size: 13px;
+  --fbtool-label-size: 12px;
+  --fbtool-note-size: 11px;
+  --fbtool-log-size: 12px;
+  --fbtool-title-size: 32px;
+  --fbtool-line-height: 1.4;
+
+  --fbtool-transition: 160ms ease;
+}
+
+.fbtool {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--fbtool-width-compact);
+  max-height: var(--fbtool-max-height);
+  overflow: auto;
+  z-index: 2147483647;
+
+  display: flex;
+  flex-direction: column;
+
+  background: var(--fbtool-panel-bg);
+  color: var(--fbtool-text);
+  border: 1px solid var(--fbtool-border);
+  border-radius: var(--fbtool-radius-modal);
+  box-shadow: var(--fbtool-shadow-modal);
+
+  font: var(--fbtool-font-size) / var(--fbtool-line-height) var(--fbtool-font);
+  padding: var(--fbtool-padding-modal);
+}
+
+.fbtool--medium { width: var(--fbtool-width-medium); }
+.fbtool--large { width: var(--fbtool-width-large); }
+
+.fbtool,
+.fbtool * {
+  box-sizing: border-box;
+}
+
+.fbtool__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--fbtool-gap);
+  position: relative;
+  padding-right: 34px;
+  margin-bottom: 10px;
+}
+
+.fbtool__title {
+  margin: 0;
+  color: var(--fbtool-accent);
+  font-size: var(--fbtool-title-size);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.fbtool__title--medium { font-size: 28px; }
+
+.fbtool__meta {
+  margin-top: 4px;
+  color: var(--fbtool-muted);
+  font-size: var(--fbtool-note-size);
+}
+
+.fbtool__close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--fbtool-close);
+  padding: 0;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 24px;
+  font-weight: 700;
+  transition: color var(--fbtool-transition), opacity var(--fbtool-transition);
+}
+
+.fbtool__close:hover { color: var(--fbtool-text); }
+
+.fbtool__row {
+  display: flex;
+  align-items: center;
+  gap: var(--fbtool-gap);
+}
+
+.fbtool__row > * { flex: 1; }
+
+.fbtool__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--fbtool-gap);
+}
+
+.fbtool__stack > * + * { margin-top: var(--fbtool-gap); }
+
+.fbtool__section {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.fbtool__hidden { display: none !important; }
+
+.fbtool label,
+.fbtool__label {
+  display: block;
+  margin: 8px 0 4px;
+  color: var(--fbtool-label);
+  font-size: var(--fbtool-label-size);
+  font-weight: 500;
+}
+
+.fbtool__note {
+  margin-top: 8px;
+  color: var(--fbtool-muted);
+  font-size: var(--fbtool-note-size);
+}
+
+.fbtool input,
+.fbtool select,
+.fbtool textarea,
+.fbtool button:not(.fbtool__close) {
+  width: 100%;
+  border-radius: var(--fbtool-radius-control);
+  border: 1px solid var(--fbtool-border-input);
+  background: var(--fbtool-control-bg);
+  color: var(--fbtool-text);
+  padding: var(--fbtool-padding-control);
+  font: inherit;
+  outline: none;
+}
+
+.fbtool input:focus,
+.fbtool select:focus,
+.fbtool textarea:focus {
+  border-color: var(--fbtool-accent);
+}
+
+.fbtool input::placeholder,
+.fbtool textarea::placeholder {
+  color: var(--fbtool-muted);
+}
+
+.fbtool textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.fbtool select[multiple],
+.fbtool__select-multiple {
+  min-height: 110px;
+}
+
+.fbtool__checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--fbtool-gap);
+  margin-top: 10px;
+  color: var(--fbtool-label);
+  font-size: var(--fbtool-label-size);
+}
+
+.fbtool__checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--fbtool-accent);
+}
+
+.fbtool__tabs {
+  display: flex;
+  width: 100%;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--fbtool-border-input);
+}
+
+.fbtool__tab {
+  flex: 1;
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fbtool-text);
+  padding: 9px;
+  cursor: pointer;
+  font-size: var(--fbtool-font-size);
+  font-weight: 700;
+}
+
+.fbtool__tab.is-active {
+  border-bottom: 2px solid var(--fbtool-accent);
+}
+
+.fbtool__tab:not(.is-active) {
+  color: var(--fbtool-muted);
+}
+
+.fbtool__btn,
+.fbtool button:not(.fbtool__close):not(.fbtool__tab) {
+  cursor: pointer;
+  font-weight: 700;
+  transition:
+    background var(--fbtool-transition),
+    border-color var(--fbtool-transition),
+    color var(--fbtool-transition),
+    opacity var(--fbtool-transition);
+}
+
+.fbtool__btn:hover,
+.fbtool button:not(.fbtool__close):not(.fbtool__tab):hover {
+  border-color: var(--fbtool-accent);
+}
+
+.fbtool__btn:disabled,
+.fbtool button:not(.fbtool__close):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fbtool__btn--primary {
+  background: var(--fbtool-accent) !important;
+  color: var(--fbtool-accent-text) !important;
+  border-color: var(--fbtool-accent) !important;
+}
+
+.fbtool__btn--secondary {
+  background: var(--fbtool-control-bg);
+  color: var(--fbtool-text);
+  border-color: var(--fbtool-border-input);
+}
+
+.fbtool__btn-group {
+  display: flex;
+  gap: var(--fbtool-gap);
+  width: 100%;
+  margin-top: 10px;
+}
+
+.fbtool__btn-group > * { flex: 1; }
+
+.fbtool__log {
+  width: 100%;
+  min-height: 120px;
+  max-height: 320px;
+  overflow-y: auto;
+
+  margin-top: 4px;
+  background: var(--fbtool-deep-bg);
+  border: 1px solid var(--fbtool-border-soft);
+  border-radius: var(--fbtool-radius-log);
+  padding: 8px;
+
+  color: var(--fbtool-text);
+  font-family: var(--fbtool-font-mono);
+  font-size: var(--fbtool-log-size);
+  line-height: var(--fbtool-line-height);
+  white-space: pre-wrap;
+}
+
+.fbtool__log-row--success,
+.fbtool .is-success { color: var(--fbtool-success); }
+
+.fbtool__log-row--warning,
+.fbtool .is-warning { color: var(--fbtool-warning); }
+
+.fbtool__log-row--error,
+.fbtool .is-error { color: var(--fbtool-error); }
+
+.fbtool-file-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(320px, calc(100vw - 24px));
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--fbtool-panel-bg);
+  color: var(--fbtool-text);
+  border: 1px solid var(--fbtool-border);
+  border-radius: var(--fbtool-radius-modal);
+  box-shadow: var(--fbtool-shadow-modal);
+  padding: var(--fbtool-padding-modal);
+  font: var(--fbtool-font-size) / var(--fbtool-line-height) var(--fbtool-font);
+}
+
+.fbtool::-webkit-scrollbar,
+.fbtool *::-webkit-scrollbar { width: 10px; }
+
+.fbtool::-webkit-scrollbar-track,
+.fbtool *::-webkit-scrollbar-track { background: var(--fbtool-deep-bg); }
+
+.fbtool::-webkit-scrollbar-thumb,
+.fbtool *::-webkit-scrollbar-thumb {
+  background: var(--fbtool-border-input);
+  border-radius: 10px;
+}
+
+.fbtool::-webkit-scrollbar-thumb:hover,
+.fbtool *::-webkit-scrollbar-thumb:hover { background: var(--fbtool-accent); }
+
+@media (max-width: 460px) {
+  .fbtool__grid,
+  .fbtool__btn-group {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .fbtool__title { font-size: 28px; }
+}
