@@ -126,6 +126,34 @@ javascript:(function(){
     log('Legacy context обновлён (read-only)','s');
   }
 
+
+
+  async function runReadOnlyChecks(){
+    const c=state.context||parseContext();
+    const checks=[];
+
+    const endpoints=[
+      {name:'Graph act endpoint',url:c.act?`https://graph.facebook.com/v19.0/act_${c.act}?fields=id` : null},
+      {name:'Business endpoint',url:c.businessId?`https://graph.facebook.com/v19.0/${c.businessId}?fields=id,name` : null},
+      {name:'Current page probe',url:location.href}
+    ];
+
+    for(const e of endpoints){
+      if(!e.url){ checks.push([e.name,'Пропущен','Недостаточно данных']); continue; }
+      try{
+        const r=await fetch(e.url,{method:'GET',credentials:'include'});
+        checks.push([e.name, r.ok?'OK':'Ошибка', `HTTP ${r.status}`]);
+      }catch(err){
+        checks.push([e.name,'Ошибка','network/fetch']);
+      }
+    }
+
+    const out={};
+    checks.forEach((x,i)=>{ out[`#${i+1} ${x[0]}`]=`${x[1]} • ${x[2]}`; });
+    renderKV(state.root.querySelector('#ov-checks'),out);
+    log('Endpoint checks завершены (read-only)','s');
+  }
+
   function runDiagnostics(){
     const c=state.context||parseContext();
     log('Диагностика окружения запущена','i');
@@ -156,6 +184,8 @@ javascript:(function(){
 <section class="p a" data-panel="overview">
   <div class="sec"><span class="label">Локальный контекст</span><div id="ov-context"></div></div>
   <div class="sec"><span class="label">Read-only проверка аккаунта</span><div id="ov-remote"></div></div>
+  <div class="sec"><span class="label">Endpoint checks</span><div id="ov-checks"></div></div>
+  <div class="sec row"><button class="btn" data-act="checks">Проверить endpoints</button><button class="btn" data-act="refresh">Обновить контекст</button></div>
 </section>
 <section class="p" data-panel="diag">
   <div class="note">Панель запускает диагностические проверки окружения и пишет результат в лог.</div>
@@ -178,6 +208,7 @@ javascript:(function(){
     root.querySelector('.fc').onclick=destroy; ov.onclick=destroy; window.addEventListener('keydown',onEsc);
     root.querySelectorAll('.tab').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
     root.querySelector('[data-act="diag"]').onclick=runDiagnostics;
+    root.querySelector('[data-act="checks"]').onclick=runReadOnlyChecks;
     root.querySelector('[data-act="copy"]').onclick=copySummary;
     root.querySelector('[data-act="legacy"]').onclick=refreshLegacy;
     root.querySelector('[data-act="close"]').onclick=destroy;
@@ -186,6 +217,7 @@ javascript:(function(){
     log('Инициализация нового fbacc.js завершена','s');
     refreshOverview();
     refreshLegacy();
+    runReadOnlyChecks();
   }
 
   init();
